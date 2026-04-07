@@ -32,7 +32,7 @@
 
                 lines.forEach(line => {
                     const columns = line.split(',');
-                    const text = columns[1]?.trim(); 
+                    const text = columns[columns.length - 1]?.trim(); 
                     if (text) wordCounts[text] = (wordCounts[text] || 0) + 1;
                 });
 
