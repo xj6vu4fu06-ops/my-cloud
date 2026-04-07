@@ -24,59 +24,57 @@
     <div id="canvas"></div>
 
     <script>
-        const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRJMkp363s_yYnDuk1V89GMRKsV3cosMJhDhn2zTqzb9uWFmKZxImpCG8XP3EnjNgvSkdQaG7tKJbts/pub?output=csv";
-        
-        // 用來追蹤哪些資料已經顯示過了
-        let renderedCount = 0;
+    const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRJMkp363s_yYnDuk1V89GMRKsV3cosMJhDhn2zTqzb9uWFmKZxImpCG8XP3EnjNgvSkdQaG7tKJbts/pub?output=csv";
+    
+    // 💡 關鍵：用來儲存「已經畫在螢幕上」的每一列原始資料
+    let renderedLines = new Set(); 
 
-        async function fetchWords() {
-            try {
-                // 每 2 秒抓一次，並加上時間戳記強制更新
-                const response = await fetch(csvUrl + "&t=" + new Date().getTime());
-                const data = await response.text();
-                const lines = data.split('\n').slice(1); // 排除標題列
-                
-                // 如果總行數大於目前已顯示的行數，代表有新留言
-                if (lines.length > renderedCount) {
-                    const newLines = lines.slice(renderedCount);
-                    addWordsToCanvas(newLines);
-                    renderedCount = lines.length; // 更新計數器
-                }
-            } catch (e) { console.error("抓取失敗", e); }
-        }
-
-        function addWordsToCanvas(newLines) {
+    async function fetchWords() {
+        try {
+            // 強制抓取最新資料
+            const response = await fetch(csvUrl + "&t=" + new Date().getTime());
+            const data = await response.text();
+            const lines = data.split('\n').slice(1); // 排除標題列
+            
             const canvas = document.getElementById('canvas');
 
-            newLines.forEach(line => {
-                const columns = line.split(',');
-                const text = columns[columns.length - 1]?.trim(); 
+            lines.forEach(line => {
+                const trimmedLine = line.trim();
                 
-                if (text && text !== "") {
-                    const span = document.createElement('span');
-                    span.className = 'word';
-                    span.innerText = text;
+                // 💡 核心邏輯：如果這行資料「從未出現過」，才幫它建立新標籤
+                if (trimmedLine !== "" && !renderedLines.has(trimmedLine)) {
                     
-                    // 隨機樣式設定
-                    const fontSize = Math.floor(Math.random() * 40) + 30; // 字體大小 30px ~ 70px
-                    span.style.fontSize = fontSize + 'px';
-                    span.style.color = `rgba(0, 0, 0, ${Math.random() * 0.7 + 0.3})`; 
-                    
-                    // 隨機位置（避開邊緣）
-                    span.style.left = (Math.random() * 80 + 5) + '%';
-                    span.style.top = (Math.random() * 80 + 5) + '%';
-                    
-                    // 隨機一點點傾斜
-                    span.style.transform = `rotate(${(Math.random() - 0.5) * 15}deg)`;
+                    const columns = trimmedLine.split(',');
+                    const text = columns[columns.length - 1]?.trim(); 
 
-                    canvas.appendChild(span);
+                    if (text && text !== "") {
+                        const span = document.createElement('span');
+                        span.className = 'word';
+                        span.innerText = text;
+                        
+                        // 隨機樣式
+                        const fontSize = Math.floor(Math.random() * 40) + 30; 
+                        span.style.fontSize = fontSize + 'px';
+                        span.style.color = `rgba(0, 0, 0, ${Math.random() * 0.7 + 0.3})`; 
+                        
+                        // 隨機位置
+                        span.style.left = (Math.random() * 85 + 5) + '%';
+                        span.style.top = (Math.random() * 85 + 5) + '%';
+                        span.style.transform = `rotate(${(Math.random() - 0.5) * 20}deg)`;
+
+                        canvas.appendChild(span);
+                        
+                        // 把這行加入「已完成名單」，下次就不會再畫它
+                        renderedLines.add(trimmedLine);
+                    }
                 }
             });
-        }
+        } catch (e) { console.error("抓取失敗", e); }
+    }
 
-        // 設定 2 秒抓取一次 (加速)
-        setInterval(fetchWords, 2000);
-        fetchWords();
-    </script>
+    // 每 2 秒巡邏一次 Google Sheets
+    setInterval(fetchWords, 2000);
+    fetchWords();
+</script>
 </body>
 </html>
