@@ -2,67 +2,80 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>即時共識文字雲</title>
+    <title>即時平滑文字雲</title>
     <style>
         body { margin: 0; background: white; overflow: hidden; font-family: "Microsoft JhengHei", sans-serif; }
         #canvas { width: 100vw; height: 100vh; position: relative; }
         .word {
             position: absolute;
-            transition: all 2s ease-in-out;
+            transition: all 1s ease-out;
             white-space: nowrap;
             cursor: default;
-            animation: fadeIn 1.5s ease-out;
+            animation: popIn 1.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* 彈跳出現效果 */
+            display: inline-block;
         }
-        @keyframes fadeIn { from { opacity: 0; transform: scale(0.5); } to { opacity: 1; transform: scale(1); } }
+        @keyframes popIn {
+            0% { opacity: 0; transform: scale(0) rotate(-15deg); }
+            100% { opacity: 1; transform: scale(1) rotate(0deg); }
+        }
     </style>
 </head>
 <body>
     <div id="canvas"></div>
 
     <script>
-        // 🚨 請把下面這串網址換成你剛才複製的 Google Sheets CSV 網址
         const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRJMkp363s_yYnDuk1V89GMRKsV3cosMJhDhn2zTqzb9uWFmKZxImpCG8XP3EnjNgvSkdQaG7tKJbts/pub?output=csv";
+        
+        // 用來追蹤哪些資料已經顯示過了
+        let renderedCount = 0;
 
         async function fetchWords() {
             try {
-                const response = await fetch(csvUrl);
+                // 每 2 秒抓一次，並加上時間戳記強制更新
+                const response = await fetch(csvUrl + "&t=" + new Date().getTime());
                 const data = await response.text();
-                const lines = data.split('\n').slice(1); 
-                const wordCounts = {};
-
-                lines.forEach(line => {
-                    const columns = line.split(',');
-                    const text = columns[columns.length - 1]?.trim(); 
-                    if (text) wordCounts[text] = (wordCounts[text] || 0) + 1;
-                });
-
-                renderCloud(wordCounts);
+                const lines = data.split('\n').slice(1); // 排除標題列
+                
+                // 如果總行數大於目前已顯示的行數，代表有新留言
+                if (lines.length > renderedCount) {
+                    const newLines = lines.slice(renderedCount);
+                    addWordsToCanvas(newLines);
+                    renderedCount = lines.length; // 更新計數器
+                }
             } catch (e) { console.error("抓取失敗", e); }
         }
 
-        function renderCloud(counts) {
+        function addWordsToCanvas(newLines) {
             const canvas = document.getElementById('canvas');
-            canvas.innerHTML = ''; 
-            
-            Object.keys(counts).forEach(text => {
-                const span = document.createElement('span');
-                span.className = 'word';
-                span.innerText = text;
-                
-                const count = counts[text];
-                const fontSize = Math.min(20 + (count * 15), 120); 
-                
-                span.style.fontSize = fontSize + 'px';
-                span.style.color = `rgba(0, 0, 0, ${Math.random() * 0.5 + 0.5})`; 
-                span.style.left = (Math.random() * 80 + 5) + '%';
-                span.style.top = (Math.random() * 80 + 5) + '%';
-                span.style.fontWeight = count > 1 ? 'bold' : 'normal';
 
-                canvas.appendChild(span);
+            newLines.forEach(line => {
+                const columns = line.split(',');
+                const text = columns[columns.length - 1]?.trim(); 
+                
+                if (text && text !== "") {
+                    const span = document.createElement('span');
+                    span.className = 'word';
+                    span.innerText = text;
+                    
+                    // 隨機樣式設定
+                    const fontSize = Math.floor(Math.random() * 40) + 30; // 字體大小 30px ~ 70px
+                    span.style.fontSize = fontSize + 'px';
+                    span.style.color = `rgba(0, 0, 0, ${Math.random() * 0.7 + 0.3})`; 
+                    
+                    // 隨機位置（避開邊緣）
+                    span.style.left = (Math.random() * 80 + 5) + '%';
+                    span.style.top = (Math.random() * 80 + 5) + '%';
+                    
+                    // 隨機一點點傾斜
+                    span.style.transform = `rotate(${(Math.random() - 0.5) * 15}deg)`;
+
+                    canvas.appendChild(span);
+                }
             });
         }
 
-        setInterval(fetchWords, 5000);
+        // 設定 2 秒抓取一次 (加速)
+        setInterval(fetchWords, 2000);
         fetchWords();
     </script>
 </body>
