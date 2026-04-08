@@ -56,32 +56,25 @@
 
 async function fetchWords() {
         try {
+            // 加上時間戳記確保抓到的是最新版 CSV
             const response = await fetch(csvUrl + "&t=" + new Date().getTime());
             const data = await response.text();
             
-            // 這裡用正則表達式處理 CSV，避免內容有逗點導致欄位跑掉
+            // 解析 CSV 行
             const lines = data.split(/\r?\n/).slice(1); 
-            
             const canvas = document.getElementById('canvas');
             const aiDisplay = document.getElementById('ai-focus');
 
             lines.forEach((line, index) => {
                 if (!line.trim()) return;
 
-                // 修正：用這個方式分割欄位比較準確
+                // 準確切割欄位
                 const columns = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
                 
-                // --- 1. 抓取 AI 整理 (C 欄，索引值是 2) ---
-                const aiText = columns[2]?.replace(/^"|"$/g, '').trim(); 
-                if (aiText && aiText !== "" && aiText !== lastAiText) {
-                    aiDisplay.innerText = aiText;
-                    lastAiText = aiText;
-                }
-
-                // --- 2. 抓取 使用者意見 (B 欄，索引值是 1) ---
+                // 1. 處理 B 欄：使用者留言 (小字)
                 const userText = columns[1]?.replace(/^"|"$/g, '').trim(); 
                 
-                // 💡 這裡用 userText 來當作「是否畫過」的標記，而不是整行 line
+                // 💡 關鍵修正：檢查這個字是否「已經被畫在畫面上」了
                 if (userText && userText !== "" && !renderedLines.has(userText)) {
                     const span = document.createElement('span');
                     span.className = 'word';
@@ -97,11 +90,21 @@ async function fetchWords() {
 
                     canvas.appendChild(span);
                     
-                    // 標記這個內容已經畫過了
+                    // 紀錄這個內容，下次就不重複畫
                     renderedLines.add(userText);
                 }
+
+                // 2. 處理 C 欄：AI 總結 (大字)
+                // 雖然 AI 寫在第 2 列，但我們掃描整張表，有字就更新
+                const aiTextFromCell = columns[2]?.replace(/^"|"$/g, '').trim();
+                if (aiTextFromCell && aiTextFromCell !== "" && aiTextFromCell !== lastAiText) {
+                    aiDisplay.innerText = aiTextFromCell;
+                    lastAiText = aiTextFromCell;
+                }
             });
-        } catch (e) { console.error("抓取失敗", e); }
+        } catch (e) { 
+            console.error("更新失敗:", e); 
+        }
     }
 
     // 每 2 秒巡邏一次 Google Sheets
