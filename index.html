@@ -54,44 +54,51 @@
     // 💡 關鍵：用來儲存「已經畫在螢幕上」的每一列原始資料
     let renderedLines = new Set(); 
 
-    async function fetchWords() {
+async function fetchWords() {
         try {
-            // 強制抓取最新資料
             const response = await fetch(csvUrl + "&t=" + new Date().getTime());
             const data = await response.text();
-            const lines = data.split('\n').slice(1); // 排除標題列
+            
+            // 這裡用正則表達式處理 CSV，避免內容有逗點導致欄位跑掉
+            const lines = data.split(/\r?\n/).slice(1); 
             
             const canvas = document.getElementById('canvas');
+            const aiDisplay = document.getElementById('ai-focus');
 
-            lines.forEach(line => {
-                const trimmedLine = line.trim();
+            lines.forEach((line, index) => {
+                if (!line.trim()) return;
+
+                // 修正：用這個方式分割欄位比較準確
+                const columns = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
                 
-                // 💡 核心邏輯：如果這行資料「從未出現過」，才幫它建立新標籤
-                if (trimmedLine !== "" && !renderedLines.has(trimmedLine)) {
+                // --- 1. 抓取 AI 整理 (C 欄，索引值是 2) ---
+                const aiText = columns[2]?.replace(/^"|"$/g, '').trim(); 
+                if (aiText && aiText !== "" && aiText !== lastAiText) {
+                    aiDisplay.innerText = aiText;
+                    lastAiText = aiText;
+                }
+
+                // --- 2. 抓取 使用者意見 (B 欄，索引值是 1) ---
+                const userText = columns[1]?.replace(/^"|"$/g, '').trim(); 
+                
+                // 💡 這裡用 userText 來當作「是否畫過」的標記，而不是整行 line
+                if (userText && userText !== "" && !renderedLines.has(userText)) {
+                    const span = document.createElement('span');
+                    span.className = 'word';
+                    span.innerText = userText;
                     
-                    const columns = trimmedLine.split(',');
-                    const text = columns[columns.length - 1]?.trim(); 
+                    const fontSize = Math.floor(Math.random() * 30) + 25; 
+                    span.style.fontSize = fontSize + 'px';
+                    span.style.color = 'hsl(' + (Math.random() * 360) + ', 70%, 50%)'; 
+                    
+                    span.style.left = (Math.random() * 80 + 10) + '%';
+                    span.style.top = (Math.random() * 80 + 10) + '%';
+                    span.style.transform = `rotate(${(Math.random() - 0.5) * 20}deg)`;
 
-                    if (text && text !== "") {
-                        const span = document.createElement('span');
-                        span.className = 'word';
-                        span.innerText = text;
-                        
-                        // 隨機樣式
-                        const fontSize = Math.floor(Math.random() * 40) + 30; 
-                        span.style.fontSize = fontSize + 'px';
-                        span.style.color = 'hsl(' + (Math.random() * 360) + ', 70%, 50%)'; 
-                        
-                        // 隨機位置
-                        span.style.left = (Math.random() * 85 + 5) + '%';
-                        span.style.top = (Math.random() * 85 + 5) + '%';
-                        span.style.transform = `rotate(${(Math.random() - 0.5) * 20}deg)`;
-
-                        canvas.appendChild(span);
-                        
-                        // 把這行加入「已完成名單」，下次就不會再畫它
-                        renderedLines.add(trimmedLine);
-                    }
+                    canvas.appendChild(span);
+                    
+                    // 標記這個內容已經畫過了
+                    renderedLines.add(userText);
                 }
             });
         } catch (e) { console.error("抓取失敗", e); }
