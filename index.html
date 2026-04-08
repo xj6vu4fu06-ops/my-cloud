@@ -112,19 +112,18 @@
                     }
 
                     // 2. 處理 C 欄：AI 總結 (大字)
-                 // 2. 處理 C 欄：AI 總結 (大字)
 const aiTextFromCell = columns[2]?.replace(/^"|"$/g, '').trim();
 
 // 💡 只有在按鈕被按下 (isAiActive 為 true) 且 Excel 裡有字時，才顯示大字
+// 💡 在 fetchWords 裡面修改這兩行特效：
 if (isAiActive && aiTextFromCell && aiTextFromCell !== "") {
     aiDisplay.innerText = aiTextFromCell;
-    aiDisplay.style.opacity = "1"; // 讓字顯示出來
-    lastAiText = aiTextFromCell;
+    aiDisplay.style.opacity = "1";
     
-    // 增加一個縮放特效，讓它出現時更有氣勢
-    aiDisplay.style.transform = "scale(1.1)";
+    // 💡 修正：縮放特效必須包含 translate(-50%, -50%)，不然會跳掉！
+    aiDisplay.style.transform = "translate(-50%, -50%) scale(1.1)"; 
     setTimeout(() => {
-        aiDisplay.style.transform = "scale(1)";
+        aiDisplay.style.transform = "translate(-50%, -50%) scale(1)";
     }, 500);
 } else if (!isAiActive) {
     // 💡 如果開關沒打開（或是 15 秒時間到了），就強制隱藏大字
