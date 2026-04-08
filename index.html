@@ -75,6 +75,7 @@
         
         let renderedLines = new Set(); 
         let lastAiText = ""; // 💡 修正：定義初始變數
+        let isAiActive = false; // 💡 新增：控制 AI 大字是否該出現的開關
 
         async function fetchWords() {
             try {
@@ -110,15 +111,24 @@
                     }
 
                     // 2. 處理 C 欄：AI 總結 (大字)
-                    const aiTextFromCell = columns[2]?.replace(/^"|"$/g, '').trim();
-                    if (aiTextFromCell && aiTextFromCell !== "" && aiTextFromCell !== lastAiText) {
-                        aiDisplay.innerText = aiTextFromCell;
-                        lastAiText = aiTextFromCell;
-                        // 讓大字出現時縮放一下更有感
-                        aiDisplay.style.transform = "translate(-50%, -50%) scale(1.2)";
-                        setTimeout(() => {
-                            aiDisplay.style.transform = "translate(-50%, -50%) scale(1)";
-                        }, 500);
+                 // 2. 處理 C 欄：AI 總結 (大字)
+const aiTextFromCell = columns[2]?.replace(/^"|"$/g, '').trim();
+
+// 💡 只有在按鈕被按下 (isAiActive 為 true) 且 Excel 裡有字時，才顯示大字
+if (isAiActive && aiTextFromCell && aiTextFromCell !== "") {
+    aiDisplay.innerText = aiTextFromCell;
+    aiDisplay.style.opacity = "1"; // 讓字顯示出來
+    lastAiText = aiTextFromCell;
+    
+    // 增加一個縮放特效，讓它出現時更有氣勢
+    aiDisplay.style.transform = "scale(1.1)";
+    setTimeout(() => {
+        aiDisplay.style.transform = "scale(1)";
+    }, 500);
+} else if (!isAiActive) {
+    // 💡 如果開關沒打開（或是 15 秒時間到了），就強制隱藏大字
+    aiDisplay.style.opacity = "0";
+}
                     }
                 });
             } catch (e) { 
@@ -129,18 +139,29 @@
         setInterval(fetchWords, 2000);
         fetchWords();
 
-        function triggerAI() {
-            const webhookUrl = "https://hook.us2.make.com/2ieu9u3wqz131jy2xzney2bpeserlpbh";
-            console.log("正在啟動 AI 總結...");
-            
-            fetch(webhookUrl)
-            .then(response => {
-                alert("✨ AI 正在讀取全場留言並進行總結，請稍候 5-10 秒！");
-            })
-            .catch(error => {
-                alert("連線失敗，請檢查網路狀態。");
-            });
-        }
+function triggerAI() {
+    const webhookUrl = "https://hook.us2.make.com/2ieu9u3wqz131jy2xzney2bpeserlpbh";
+    
+    // 💡 按下按鈕時：開啟 AI 顯示權限
+    isAiActive = true;
+    console.log("AI 顯示開關已開啟");
+
+    fetch(webhookUrl)
+    .then(response => {
+        alert("✨ AI 正在讀取全場留言並進行總結，請稍候 5-10 秒！");
+        
+        // 💡 15 秒後自動關閉 AI 大字顯示，維持畫面整潔
+        setTimeout(() => {
+            isAiActive = false;
+            document.getElementById('ai-focus').style.opacity = "0"; // 讓字輕輕消失
+            console.log("AI 顯示開關已關閉");
+        }, 15000); 
+    })
+    .catch(error => {
+        alert("連線失敗，請檢查網路狀態。");
+        isAiActive = false;
+    });
+}
     </script>
 </body>
 </html>
