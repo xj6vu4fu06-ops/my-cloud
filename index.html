@@ -4,22 +4,21 @@
     <meta charset="UTF-8">
     <title>即時平滑文字雲</title>
     <style>
-      body { 
-    margin: 0; 
-    /* 這裡改成夢幻淡紫色漸層 */
-    background: radial-gradient(circle, #f3e5f5 0%, #ce93d8 100%); 
-    height: 100vh;
-    width: 100vw;
-    overflow: hidden; 
-    font-family: "Microsoft JhengHei", sans-serif; 
-}
+        body { 
+            margin: 0; 
+            background: radial-gradient(circle, #f3e5f5 0%, #ce93d8 100%); 
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden; 
+            font-family: "Microsoft JhengHei", sans-serif; 
+        }
         #canvas { width: 100vw; height: 100vh; position: relative; }
         .word {
             position: absolute;
             transition: all 1s ease-out;
             white-space: nowrap;
             cursor: default;
-            animation: popIn 1.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* 彈跳出現效果 */
+            animation: popIn 1.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             display: inline-block;
         }
         @keyframes popIn {
@@ -29,12 +28,125 @@
     </style>
 </head>
 <body>
-<div id="ai-focus" style="
-    position: fixed;
-    top: 50%;           /* 垂直從 50% 開始 */
-    left: 50%;          /* 水平從 50% 開始 */
-    transform: translate(-50%, -50%); /* 💡 關鍵：往回拉自己一半的寬高，達成絕對置中 */
-    width: 90vw;        /* 寬度稍微縮一點，避免字碰到邊緣 */
+    <div id="ai-focus" style="
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 90vw;
+        display: flex;
+        flex-direction: column;
+        align-items: center; 
+        justify-content: center;
+        text-align: center;
+        font-size: 80px;
+        font-weight: 900;
+        color: #4a148c;
+        text-shadow: 0 0 30px rgba(255,255,255,0.9);
+        z-index: 9999;
+        pointer-events: none;
+        line-height: 1.3;
+        transition: opacity 1s ease, transform 0.5s ease;
+        white-space: pre-wrap;
+        opacity: 0;
+    "></div>
+
+    <button onclick="triggerAI()" style="
+        position: fixed; 
+        bottom: 30px; 
+        right: 30px; 
+        z-index: 1000; 
+        padding: 15px 30px; 
+        background: linear-gradient(135deg, #6e8efb, #a777e3); 
+        color: white; 
+        border: none; 
+        border-radius: 50px; 
+        cursor: pointer; 
+        font-size: 20px; 
+        font-weight: bold;
+        box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        transition: 0.3s;">
+        🪄 1, 2, 3 看共識！
+    </button>
+    <div id="canvas"></div>
+
+    <script>
+        const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRJMkp363s_yYnDuk1V89GMRKsV3cosMJhDhn2zTqzb9uWFmKZxImpCG8XP3EnjNgvSkdQaG7tKJbts/pub?output=csv";
+        
+        let renderedLines = new Set(); 
+        let lastAiText = ""; 
+        let isAiActive = false; 
+
+        async function fetchWords() {
+            try {
+                const response = await fetch(csvUrl + "&t=" + new Date().getTime());
+                const data = await response.text();
+                const lines = data.split(/\r?\n/).slice(1); 
+                const canvas = document.getElementById('canvas');
+                const aiDisplay = document.getElementById('ai-focus');
+
+                lines.forEach((line) => {
+                    if (!line.trim()) return;
+                    const columns = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+                    
+                    // 1. 處理 B 欄：使用者留言 (小字)
+                    const userText = columns[1]?.replace(/^"|"$/g, '').trim(); 
+                    if (userText && userText !== "" && !renderedLines.has(userText)) {
+                        const span = document.createElement('span');
+                        span.className = 'word';
+                        span.innerText = userText;
+                        const fontSize = Math.floor(Math.random() * 30) + 25; 
+                        span.style.fontSize = fontSize + 'px';
+                        span.style.color = 'hsl(' + (Math.random() * 360) + ', 70%, 50%)'; 
+                        span.style.left = (Math.random() * 80 + 10) + '%';
+                        span.style.top = (Math.random() * 80 + 10) + '%';
+                        span.style.transform = `rotate(${(Math.random() - 0.5) * 20}deg)`;
+                        canvas.appendChild(span);
+                        renderedLines.add(userText);
+                    }
+
+                    // 2. 處理 C 欄：AI 總結 (大字)
+                    const aiTextFromCell = columns[2]?.replace(/^"|"$/g, '').trim();
+                    if (isAiActive && aiTextFromCell && aiTextFromCell !== "") {
+                        aiDisplay.innerText = aiTextFromCell;
+                        aiDisplay.style.opacity = "1";
+                        // 保持居中的縮放特效
+                        aiDisplay.style.transform = "translate(-50%, -50%) scale(1.1)"; 
+                        setTimeout(() => {
+                            if(isAiActive) aiDisplay.style.transform = "translate(-50%, -50%) scale(1)";
+                        }, 500);
+                    } else if (!isAiActive) {
+                        aiDisplay.style.opacity = "0";
+                    }
+                });
+            } catch (e) { 
+                console.error("更新失敗:", e); 
+            }
+        }
+
+        setInterval(fetchWords, 2000);
+        fetchWords();
+
+        function triggerAI() {
+            const webhookUrl = "https://hook.us2.make.com/2ieu9u3wqz131jy2xzney2bpeserlpbh";
+            isAiActive = true;
+            
+            fetch(webhookUrl)
+            .then(response => {
+                alert("✨ AI 正在讀取全場留言並進行總結，請稍候 5-10 秒！");
+                setTimeout(() => {
+                    isAiActive = false;
+                    document.getElementById('ai-focus').style.opacity = "0";
+                }, 15000); 
+            })
+            .catch(error => {
+                alert("連線失敗");
+                isAiActive = false;
+            });
+        }
+    </script>
+</body>
+</html>    width: 90vw;        /* 寬度稍微縮一點，避免字碰到邊緣 */
     display: flex;
     flex-direction: column;
     align-items: center; 
