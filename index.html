@@ -29,21 +29,27 @@
     </style>
 </head>
 <body>
-    <div id="ai-focus" style="
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        font-size: 120px;
-        font-weight: 900;
-        color: #4a148c;
-        text-shadow: 0 0 30px rgba(255,255,255,0.8);
-        z-index: 500;
-        pointer-events: none;
-        text-align: center;
-        letter-spacing: 15px;
-        transition: all 1s ease;">
-    </div>
+<div id="ai-focus" style="
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;    /* 垂直居中 */
+    justify-content: center; /* 水平居中 */
+    text-align: center;      /* 文字對齊居中 */
+    flex-direction: column;  /* 確保多行時由上往排列 */
+    font-size: 80px;         /* 稍微縮小一點點，避免兩行太擠 */
+    font-weight: 900;
+    color: #4a148c;
+    text-shadow: 0 0 30px rgba(255,255,255,0.8);
+    z-index: 500;
+    pointer-events: none;
+    line-height: 1.4;        /* 設定行高，讓兩行之間有舒服的間距 */
+    transition: all 1s ease;
+    white-space: pre-wrap;   /* 💡 關鍵：保留換行符號 */
+"></div>
 
     <button onclick="triggerAI()" style="
         position: fixed; 
