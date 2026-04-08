@@ -101,5 +101,22 @@
     setInterval(fetchWords, 2000);
     fetchWords();
 </script>
+    <script>
+function triggerAI() {
+    // 這是你的專屬 Webhook 網址
+    const webhookUrl = "https://hook.us2.make.com/htwvglndp285dh85o67fvuk7pa5uwmyn";
+    
+    // 按下後先給個提示，避免重複狂按
+    console.log("正在啟動 AI 總結...");
+    
+    fetch(webhookUrl)
+    .then(response => {
+        alert("✨ AI 正在讀取全場留言並進行總結，請稍候 5-10 秒！");
+    })
+    .catch(error => {
+        alert("連線失敗，請檢查網路狀態。");
+    });
+}
+</script>
 </body>
 </html>
