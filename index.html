@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>即時文字雲系統</title>
+    <title>即時文字雲與 AI 智慧總結系統</title>
     <style>
         body { 
             margin: 0; 
@@ -12,7 +12,9 @@
             overflow: hidden; 
             font-family: "Microsoft JhengHei", sans-serif; 
         }
-        #canvas { width: 100vw; height: 100vh; position: relative; }
+        #canvas { width: 100vw; height: 100vh; position: relative; z-index: 1; }
+        
+        /* 文字雲單字樣式 */
         .word {
             position: absolute;
             transition: all 1s ease-out;
@@ -25,96 +27,99 @@
             0% { opacity: 0; transform: scale(0); }
             100% { opacity: 1; transform: scale(1); }
         }
+
+        /* AI 總結顯示區域 */
+        #ai-focus {
+            position: fixed;
+            top: 45%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 85vw;
+            text-align: center;
+            font-size: 60px;
+            font-weight: 900;
+            color: #4a148c;
+            text-shadow: 0 0 30px #fff, 0 0 10px rgba(74, 20, 140, 0.3);
+            z-index: 999;
+            pointer-events: none;
+            transition: opacity 0.8s;
+            line-height: 1.4;
+        }
+
+        /* 控制按鈕容器 */
+        .control-panel {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .nav-btn {
+            background: rgba(74, 20, 140, 0.8);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 50px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .nav-btn:hover {
+            background: #4a148c;
+            transform: scale(1.05);
+        }
+
+        .info-badge {
+            background: white;
+            color: #4a148c;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-weight: 900;
+            border: 2px solid #4a148c;
+            min-width: 100px;
+            text-align: center;
+        }
+
+        /* 原有的觸發按鈕樣式 */
+        #trigger-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 40px;
+            z-index: 1001;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            outline: none;
+        }
     </style>
 </head>
 <body>
-    <div id="ai-focus" style="
-        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-        width: 90vw; text-align: center; font-size: 80px; font-weight: 900;
-        color: #4a148c; text-shadow: 0 0 30px #fff; z-index: 9999;
-        pointer-events: none; opacity: 0; transition: opacity 1s;
-    "></div>
 
-    <button onclick="triggerAI()" style="
-        position: fixed; bottom: 30px; right: 80px; z-index: 1000;
-        background: transparent; border: none; cursor: pointer;
-        display: flex; flex-direction: column; align-items: center; outline: none;
-    ">
-        <img src="./my-button.gif" style="width: 150px; height: auto; margin-bottom: 10px;">
-        <div style="color: #B76E79; font-size: 24px; font-weight: 900; text-shadow: 0 0 10px #fff;">
-            阿彌陀佛<br><span style="font-size: 20px;">~對我開心~</span>
+    <div id="ai-focus">等待 AI 彙整訊息...</div>
+
+    <div class="control-panel">
+        <button class="nav-btn" onclick="changeAiIndex(-1)">⬅ 上一則</button>
+        <div class="info-badge" id="ai-counter">AI 智慧紀錄</div>
+        <button class="nav-btn" onclick="changeAiIndex(1)">下一則 ➡</button>
+    </div>
+
+    <button id="trigger-btn" onclick="triggerAI()">
+        <img src="./my-button.gif" style="width: 120px; height: auto; margin-bottom: 10px;" onerror="this.src='https://cdn-icons-png.flaticon.com/512/1077/1077114.png'">
+        <div style="color: #B76E79; font-size: 20px; font-weight: 900; text-shadow: 0 0 10px #fff;">
+            阿彌陀佛<br><span style="font-size: 16px;">~點我開釋~</span>
         </div>
     </button>
 
     <div id="canvas"></div>
 
     <script>
-        // 1. 定義 CSV 來源與 Webhook (確保兩者都存在)
-        const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRJMkp363s_yYnDuk1V89GMRKsV3cosMJhDhn2zTqzb9uWFmKZxImpCG8XP3EnjNgvSkdQaG7tKJbts/pub?output=csv";
-        const webhookUrl = "https://hook.us2.make.com/to36jd8jhtw2hmda6wd92h14zdlhjz2u";
-
-        let renderedLines = new Set();
-        let isAiActive = false;
-
-        async function fetchWords() {
-            try {
-                // 加上時間戳記強制更新，不抓快取
-                const response = await fetch(csvUrl + "&cachebust=" + new Date().getTime());
-                const data = await response.text();
-                const lines = data.split(/\r?\n/).slice(1);
-                const canvas = document.getElementById('canvas');
-                const aiDisplay = document.getElementById('ai-focus');
-
-                lines.forEach((line) => {
-                    if (!line.trim()) return;
-                    const columns = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-                    
-                    // 處理 B 欄：使用者留言
-                    const userText = columns[1]?.replace(/^"|"$/g, '').trim();
-                    if (userText && !renderedLines.has(userText)) {
-                        const span = document.createElement('span');
-                        span.className = 'word';
-                        span.innerText = userText;
-                        span.style.fontSize = (Math.floor(Math.random() * 30) + 25) + 'px';
-                        span.style.color = `hsl(${Math.random() * 360}, 70%, 50%)`;
-                        span.style.left = (Math.random() * 80 + 10) + '%';
-                        span.style.top = (Math.random() * 80 + 10) + '%';
-                        canvas.appendChild(span);
-                        renderedLines.add(userText);
-                    }
-
-                    // 處理 C 欄：AI 總結
-                    const aiText = columns[2]?.replace(/^"|"$/g, '').trim();
-                    if (isAiActive && aiText) {
-                        aiDisplay.innerText = aiText;
-                        aiDisplay.style.opacity = "1";
-                    }
-                });
-            } catch (e) {
-                console.error("讀取失敗:", e);
-            }
-        }
-
-        // 每 3 秒抓一次
-        setInterval(fetchWords, 1500);
-        fetchWords();
-
-        function triggerAI() {
-            isAiActive = true;
-            fetch(webhookUrl)
-            .then(() => {
-                alert("✨ 阿彌陀佛！AI 正在彙整留言，請稍候 5-10 秒！");
-                // 15 秒後自動隱藏 AI 大字
-                setTimeout(() => {
-                    isAiActive = false;
-                    document.getElementById('ai-focus').style.opacity = "0";
-                }, 15000);
-            })
-            .catch(() => {
-                alert("連線失敗");
-                isAiActive = false;
-            });
-        }
-    </script>
-</body>
-</html>
