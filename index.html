@@ -51,23 +51,35 @@
         opacity: 0;
     "></div>
 
-    <button onclick="triggerAI()" style="
-        position: fixed; 
-        bottom: 30px; 
-        right: 30px; 
-        z-index: 1000; 
-        padding: 15px 30px; 
-        background: linear-gradient(135deg, #6e8efb, #a777e3); 
-        color: white; 
-        border: none; 
-        border-radius: 50px; 
-        cursor: pointer; 
-        font-size: 20px; 
-        font-weight: bold;
-        box-shadow: 0 10px 20px rgba(0,0,0,0.3);
-        transition: 0.3s;">
-        🪄 1, 2, 3 看共識！
-    </button>
+<button id="custom-btn" onclick="triggerAI()" style="
+    position: fixed; 
+    bottom: 30px; 
+    right: 30px; 
+    z-index: 1000; 
+    
+    /* 1. 這裡請填入您剛剛上傳的完整檔名，注意大小寫 */
+    background: url('你的檔案名稱.gif') no-repeat center center; 
+    background-size: contain; 
+    background-color: transparent; 
+
+    /* 2. 移除邊框與預設背景 */
+    border: none;
+    outline: none;
+    
+    /* 3. 調整文字樣式 */
+    color: #4a148c; 
+    font-size: 22px; 
+    font-weight: 900;
+    text-shadow: 2px 2px 5px rgba(255,255,255,1), -2px -2px 5px rgba(255,255,255,1);
+    
+    /* 4. 根據您的 GIF 形狀調整寬高 */
+    width: 200px;
+    height: 200px;
+    cursor: pointer;
+    transition: transform 0.3s;
+">
+    阿彌陀佛，對我開心
+</button>
     <div id="canvas"></div>
 
     <script>
