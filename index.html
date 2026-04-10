@@ -14,7 +14,6 @@
         }
         #canvas { width: 100vw; height: 100vh; position: relative; z-index: 1; }
         
-        /* 文字雲單字樣式 */
         .word {
             position: absolute;
             transition: all 1s ease-out;
@@ -28,7 +27,6 @@
             100% { opacity: 1; transform: scale(1); }
         }
 
-        /* AI 總結顯示區域 */
         #ai-focus {
             position: fixed;
             top: 45%;
@@ -46,7 +44,6 @@
             line-height: 1.4;
         }
 
-        /* 控制按鈕容器 */
         .control-panel {
             position: fixed;
             bottom: 40px;
@@ -67,13 +64,7 @@
             font-size: 18px;
             font-weight: bold;
             cursor: pointer;
-            transition: all 0.3s;
             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-        }
-
-        .nav-btn:hover {
-            background: #4a148c;
-            transform: scale(1.05);
         }
 
         .info-badge {
@@ -87,7 +78,6 @@
             text-align: center;
         }
 
-        /* 原有的觸發按鈕樣式 */
         #trigger-btn {
             position: fixed;
             bottom: 30px;
@@ -99,17 +89,16 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            outline: none;
         }
     </style>
 </head>
 <body>
 
-    <div id="ai-focus">等待 AI 彙整訊息...</div>
+    <div id="ai-focus">等待開釋中...</div>
 
     <div class="control-panel">
         <button class="nav-btn" onclick="changeAiIndex(-1)">⬅ 上一則</button>
-        <div class="info-badge" id="ai-counter">AI 智慧紀錄</div>
+        <div class="info-badge" id="ai-counter">AI 紀錄 0/0</div>
         <button class="nav-btn" onclick="changeAiIndex(1)">下一則 ➡</button>
     </div>
 
@@ -123,3 +112,109 @@
     <div id="canvas"></div>
 
     <script>
+        const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRJMkp363s_yYnDuk1V89GMRKsV3cosMJhDhn2zTqzb9uWFmKZxImpCG8XP3EnjNgvSkdQaG7tKJbts/pub?output=csv";
+        const webhookUrl = "https://hook.us2.make.com/to36jd8jhtw2hmda6wd92h14zdlhjz2u";
+
+        let renderedLines = new Set();
+        let aiMessages = [];
+        let currentAiIndex = -1;
+
+        async function fetchWords() {
+            try {
+                const response = await fetch(csvUrl + "&cachebust=" + new Date().getTime());
+                const data = await response.text();
+                // 修正：使用更穩定的換行符號分割
+                const rows = data.split(/\r?\n/);
+                if (rows.length <= 1) return;
+
+                const canvas = document.getElementById('canvas');
+                let tempAiMessages = [];
+
+                // 從第二列開始處理 (索引 1)
+                for (let i = 1; i < rows.length; i++) {
+                    const line = rows[i].trim();
+                    if (!line) continue;
+
+                    // 正則分割：解決引號內有逗號的問題
+                    const columns = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+                    
+                    // B 欄：觀眾留言 (文字雲)
+                    const userText = columns[1]?.replace(/^"|"$/g, '').trim();
+                    if (userText && !renderedLines.has(userText)) {
+                        createWord(userText);
+                        renderedLines.add(userText);
+                    }
+
+                    // C 欄：收集 AI 總結內容
+                    const aiText = columns[2]?.replace(/^"|"$/g, '').trim();
+                    // 過濾掉標題文字或空白
+                    if (aiText && aiText !== "" && aiText !== "AI總結" && aiText !== "AI 總結") {
+                        tempAiMessages.push(aiText);
+                    }
+                }
+
+                // 更新 AI 訊息與翻頁計數
+                if (tempAiMessages.length !== aiMessages.length) {
+                    const isFirstLoad = aiMessages.length === 0;
+                    aiMessages = tempAiMessages;
+                    
+                    // 若有新資料，預設跳到最新的一則
+                    if (isFirstLoad || currentAiIndex >= aiMessages.length - 2) {
+                        currentAiIndex = aiMessages.length - 1;
+                    }
+                    updateAiDisplay();
+                }
+
+            } catch (e) {
+                console.error("資料獲取失敗:", e);
+            }
+        }
+
+        function updateAiDisplay() {
+            const aiDisplay = document.getElementById('ai-focus');
+            const counter = document.getElementById('ai-counter');
+            
+            if (aiMessages.length > 0) {
+                aiDisplay.style.opacity = "0";
+                setTimeout(() => {
+                    aiDisplay.innerText = aiMessages[currentAiIndex];
+                    aiDisplay.style.opacity = "1";
+                    counter.innerText = `紀錄 ${currentAiIndex + 1} / ${aiMessages.length}`;
+                }, 400);
+            } else {
+                aiDisplay.innerText = "等待開釋中...";
+                counter.innerText = "紀錄 0/0";
+            }
+        }
+
+        function changeAiIndex(dir) {
+            if (aiMessages.length === 0) return;
+            currentAiIndex += dir;
+            if (currentAiIndex < 0) currentAiIndex = aiMessages.length - 1;
+            if (currentAiIndex >= aiMessages.length) currentAiIndex = 0;
+            updateAiDisplay();
+        }
+
+        function createWord(text) {
+            const span = document.createElement('span');
+            span.className = 'word';
+            span.innerText = text;
+            span.style.fontSize = (Math.floor(Math.random() * 25) + 20) + 'px';
+            span.style.color = `hsl(${Math.random() * 360}, 60%, 45%)`;
+            span.style.left = (Math.random() * 80 + 10) + '%';
+            span.style.top = (Math.random() * 80 + 10) + '%';
+            span.style.transform = `rotate(${(Math.random() * 20 - 10)}deg)`;
+            document.getElementById('canvas').appendChild(span);
+        }
+
+        function triggerAI() {
+            fetch(webhookUrl)
+            .then(() => alert("✨ 祈福成功！AI 正透過 Make.com 彙整，請稍候 10 秒。"))
+            .catch(() => alert("連線失敗"));
+        }
+
+        setInterval(fetchWords, 3000); // 延長至 3 秒，避免頻繁請求被 Google 暫時封鎖
+        fetchWords();
+    </script>
+</body>
+</html>
