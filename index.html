@@ -54,7 +54,7 @@
 <button id="custom-btn" onclick="triggerAI()" style="
     position: fixed; 
     bottom: 30px; 
-    right: 30px; 
+    right: 80px; /* 1. 位置向左移：從原本的 30px 改成 80px (數字越大越靠左) */
     z-index: 1000; 
     background: transparent; 
     border: none;
@@ -67,19 +67,21 @@
     outline: none;
 ">
     <img src="./my-button.gif" alt="icon" style="
-        width: 150px; /* 這裡可以調整圖片大小 */
+        width: 150px; 
         height: auto; 
         margin-bottom: 10px;
         display: block;
     ">
 
     <div style="
-        color: #4a148c; 
+        color: #B76E79; /* 玫瑰金色 (Rose Gold) */
         font-size: 24px; 
         font-weight: 900;
         line-height: 1.3;
-        text-shadow: 2px 2px 5px #fff, -2px -2px 5px #fff;
+        /* 3. 調整發光效果，讓玫瑰金色更顯眼 */
+        text-shadow: 1px 1px 2px #fff, -1px -1px 2px #fff, 0 0 10px #fff; 
         text-align: center;
+        white-space: nowrap;
     ">
         阿彌陀佛<br>
         <span style="font-size: 20px;">~對我開心~</span>
