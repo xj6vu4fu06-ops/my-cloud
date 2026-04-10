@@ -2,103 +2,69 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>即時文字雲與 AI 智慧總結系統</title>
+    <title>即時文字雲系統 - 穩定相容版</title>
     <style>
         body { 
             margin: 0; 
             background: radial-gradient(circle, #f3e5f5 0%, #ce93d8 100%); 
-            height: 100vh;
-            width: 100vw;
-            overflow: hidden; 
+            height: 100vh; width: 100vw; overflow: hidden; 
             font-family: "Microsoft JhengHei", sans-serif; 
         }
         #canvas { width: 100vw; height: 100vh; position: relative; z-index: 1; }
-        
         .word {
-            position: absolute;
-            transition: all 1s ease-out;
-            white-space: nowrap;
-            cursor: default;
+            position: absolute; transition: all 1s ease-out;
+            white-space: nowrap; cursor: default;
             animation: popIn 1.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            display: inline-block;
+            display: inline-block; font-weight: bold;
         }
-        @keyframes popIn {
-            0% { opacity: 0; transform: scale(0); }
-            100% { opacity: 1; transform: scale(1); }
-        }
+        @keyframes popIn { 0% { opacity: 0; transform: scale(0); } 100% { opacity: 1; transform: scale(1); } }
 
         #ai-focus {
-            position: fixed;
-            top: 45%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 85vw;
-            text-align: center;
-            font-size: 60px;
-            font-weight: 900;
-            color: #4a148c;
-            text-shadow: 0 0 30px #fff, 0 0 10px rgba(74, 20, 140, 0.3);
-            z-index: 999;
-            pointer-events: none;
-            transition: opacity 0.8s;
-            line-height: 1.4;
+            position: fixed; top: 40%; left: 50%; transform: translate(-50%, -50%);
+            width: 85vw; text-align: center; font-size: 55px; font-weight: 900;
+            color: #4a148c; text-shadow: 0 0 30px #fff; z-index: 999;
+            pointer-events: none; transition: opacity 0.8s; line-height: 1.4;
         }
 
         .control-panel {
-            position: fixed;
-            bottom: 40px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 1000;
-            display: flex;
-            align-items: center;
-            gap: 20px;
+            position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
+            z-index: 1000; display: flex; align-items: center; gap: 20px;
         }
 
         .nav-btn {
-            background: rgba(74, 20, 140, 0.8);
-            color: white;
-            border: none;
-            padding: 12px 25px;
-            border-radius: 50px;
-            font-size: 18px;
-            font-weight: bold;
-            cursor: pointer;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            background: rgba(74, 20, 140, 0.8); color: white; border: none;
+            padding: 12px 25px; border-radius: 50px; font-size: 18px;
+            font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
         }
 
         .info-badge {
-            background: white;
-            color: #4a148c;
-            padding: 8px 20px;
-            border-radius: 20px;
-            font-weight: 900;
-            border: 2px solid #4a148c;
-            min-width: 100px;
-            text-align: center;
+            background: white; color: #4a148c; padding: 8px 20px;
+            border-radius: 20px; font-weight: 900; border: 2px solid #4a148c;
+            min-width: 120px; text-align: center;
+        }
+
+        /* 除錯小視窗：如果還是沒畫面，看這裡的數字 */
+        #debug-info {
+            position: fixed; top: 10px; left: 10px; z-index: 9999;
+            background: rgba(0,0,0,0.5); color: #fff; padding: 5px 10px;
+            font-size: 12px; border-radius: 5px; pointer-events: none;
         }
 
         #trigger-btn {
-            position: fixed;
-            bottom: 30px;
-            right: 40px;
-            z-index: 1001;
-            background: transparent;
-            border: none;
-            cursor: pointer;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            position: fixed; bottom: 30px; right: 40px; z-index: 1001;
+            background: transparent; border: none; cursor: pointer;
+            display: flex; flex-direction: column; align-items: center;
         }
     </style>
 </head>
 <body>
 
+    <div id="debug-info">正在連線至表單...</div>
     <div id="ai-focus">等待開釋中...</div>
 
     <div class="control-panel">
         <button class="nav-btn" onclick="changeAiIndex(-1)">⬅ 上一則</button>
-        <div class="info-badge" id="ai-counter">AI 紀錄 0/0</div>
+        <div class="info-badge" id="ai-counter">紀錄 0 / 0</div>
         <button class="nav-btn" onclick="changeAiIndex(1)">下一則 ➡</button>
     </div>
 
@@ -122,43 +88,45 @@
         async function fetchWords() {
             try {
                 const response = await fetch(csvUrl + "&cachebust=" + new Date().getTime());
-                const data = await response.text();
-                // 修正：使用更穩定的換行符號分割
-                const rows = data.split(/\r?\n/);
-                if (rows.length <= 1) return;
+                const csvText = await response.text();
+                
+                // 使用更精確的 CSV 解析
+                const rows = parseCSV(csvText);
+                if (rows.length < 1) return;
 
-                const canvas = document.getElementById('canvas');
+                const debug = document.getElementById('debug-info');
                 let tempAiMessages = [];
+                let bCount = 0;
 
-                // 從第二列開始處理 (索引 1)
+                // 從第 1 列開始（排除標題列）
                 for (let i = 1; i < rows.length; i++) {
-                    const line = rows[i].trim();
-                    if (!line) continue;
+                    const columns = rows[i];
+                    if (columns.length < 2) continue;
 
-                    // 正則分割：解決引號內有逗號的問題
-                    const columns = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-                    
-                    // B 欄：觀眾留言 (文字雲)
-                    const userText = columns[1]?.replace(/^"|"$/g, '').trim();
-                    if (userText && !renderedLines.has(userText)) {
+                    // 嘗試自動定位：
+                    // 通常 B 欄在 index 1，C 欄在 index 2
+                    const userText = columns[1]?.trim();
+                    const aiText = columns[2]?.trim();
+
+                    // 處理 B 欄文字雲
+                    if (userText && userText !== "" && !renderedLines.has(userText)) {
                         createWord(userText);
                         renderedLines.add(userText);
+                        bCount++;
                     }
 
-                    // C 欄：收集 AI 總結內容
-                    const aiText = columns[2]?.replace(/^"|"$/g, '').trim();
-                    // 過濾掉標題文字或空白
+                    // 處理 C 欄 AI 總結
                     if (aiText && aiText !== "" && aiText !== "AI總結" && aiText !== "AI 總結") {
                         tempAiMessages.push(aiText);
                     }
                 }
 
-                // 更新 AI 訊息與翻頁計數
+                debug.innerText = `留言數: ${renderedLines.size} | AI紀錄: ${tempAiMessages.length}`;
+
+                // 更新 AI 訊息
                 if (tempAiMessages.length !== aiMessages.length) {
                     const isFirstLoad = aiMessages.length === 0;
                     aiMessages = tempAiMessages;
-                    
-                    // 若有新資料，預設跳到最新的一則
                     if (isFirstLoad || currentAiIndex >= aiMessages.length - 2) {
                         currentAiIndex = aiMessages.length - 1;
                     }
@@ -166,14 +134,51 @@
                 }
 
             } catch (e) {
-                console.error("資料獲取失敗:", e);
+                console.error("Fetch Error:", e);
+                document.getElementById('debug-info').innerText = "連線失敗";
             }
+        }
+
+        // 穩定的 CSV 解析函式 (處理引號與逗號)
+        function parseCSV(text) {
+            const rows = [];
+            let currentRow = [];
+            let currentField = '';
+            let inQuotes = false;
+
+            for (let i = 0; i < text.length; i++) {
+                const char = text[i];
+                const nextChar = text[i + 1];
+
+                if (char === '"' && inQuotes && nextChar === '"') {
+                    currentField += '"'; i++;
+                } else if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    currentRow.push(currentField);
+                    currentField = '';
+                } else if ((char === '\r' || char === '\n') && !inQuotes) {
+                    if (currentField || currentRow.length > 0) {
+                        currentRow.push(currentField);
+                        rows.push(currentRow);
+                        currentRow = [];
+                        currentField = '';
+                    }
+                    if (char === '\r' && nextChar === '\n') i++;
+                } else {
+                    currentField += char;
+                }
+            }
+            if (currentField || currentRow.length > 0) {
+                currentRow.push(currentField);
+                rows.push(currentRow);
+            }
+            return rows;
         }
 
         function updateAiDisplay() {
             const aiDisplay = document.getElementById('ai-focus');
             const counter = document.getElementById('ai-counter');
-            
             if (aiMessages.length > 0) {
                 aiDisplay.style.opacity = "0";
                 setTimeout(() => {
@@ -181,9 +186,6 @@
                     aiDisplay.style.opacity = "1";
                     counter.innerText = `紀錄 ${currentAiIndex + 1} / ${aiMessages.length}`;
                 }, 400);
-            } else {
-                aiDisplay.innerText = "等待開釋中...";
-                counter.innerText = "紀錄 0/0";
             }
         }
 
@@ -199,21 +201,21 @@
             const span = document.createElement('span');
             span.className = 'word';
             span.innerText = text;
-            span.style.fontSize = (Math.floor(Math.random() * 25) + 20) + 'px';
-            span.style.color = `hsl(${Math.random() * 360}, 60%, 45%)`;
-            span.style.left = (Math.random() * 80 + 10) + '%';
-            span.style.top = (Math.random() * 80 + 10) + '%';
+            span.style.fontSize = (Math.floor(Math.random() * 20) + 24) + 'px';
+            span.style.color = `hsl(${Math.random() * 360}, 70%, 40%)`;
+            span.style.left = (Math.random() * 75 + 10) + '%';
+            span.style.top = (Math.random() * 75 + 10) + '%';
             span.style.transform = `rotate(${(Math.random() * 20 - 10)}deg)`;
             document.getElementById('canvas').appendChild(span);
         }
 
         function triggerAI() {
             fetch(webhookUrl)
-            .then(() => alert("✨ 祈福成功！AI 正透過 Make.com 彙整，請稍候 10 秒。"))
+            .then(() => alert("✨ 祈福成功！AI 正在彙整新紀錄。"))
             .catch(() => alert("連線失敗"));
         }
 
-        setInterval(fetchWords, 3000); // 延長至 3 秒，避免頻繁請求被 Google 暫時封鎖
+        setInterval(fetchWords, 3000);
         fetchWords();
     </script>
 </body>
