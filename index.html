@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>即時平滑文字雲</title>
+    <title>即時文字雲系統</title>
     <style>
         body { 
             margin: 0; 
@@ -22,85 +22,46 @@
             display: inline-block;
         }
         @keyframes popIn {
-            0% { opacity: 0; transform: scale(0) rotate(-15deg); }
-            100% { opacity: 1; transform: scale(1) rotate(0deg); }
+            0% { opacity: 0; transform: scale(0); }
+            100% { opacity: 1; transform: scale(1); }
         }
     </style>
 </head>
 <body>
     <div id="ai-focus" style="
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 90vw;
-        display: flex;
-        flex-direction: column;
-        align-items: center; 
-        justify-content: center;
-        text-align: center;
-        font-size: 80px;
-        font-weight: 900;
-        color: #4a148c;
-        text-shadow: 0 0 30px rgba(255,255,255,0.9);
-        z-index: 9999;
-        pointer-events: none;
-        line-height: 1.3;
-        transition: opacity 1s ease, transform 0.5s ease;
-        white-space: pre-wrap;
-        opacity: 0;
+        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        width: 90vw; text-align: center; font-size: 80px; font-weight: 900;
+        color: #4a148c; text-shadow: 0 0 30px #fff; z-index: 9999;
+        pointer-events: none; opacity: 0; transition: opacity 1s;
     "></div>
 
-<button id="custom-btn" onclick="triggerAI()" style="
-    position: fixed; 
-    bottom: 30px; 
-    right: 80px; 
-    z-index: 1000; 
-    background: transparent; 
-    border: none;
-    cursor: pointer;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    transition: transform 0.3s;
-    outline: none;
-">
-    <img src="./my-button.gif" alt="icon" style="
-        width: 150px; 
-        height: auto; 
-        margin-bottom: 10px;
-        display: block;
+    <button onclick="triggerAI()" style="
+        position: fixed; bottom: 30px; right: 80px; z-index: 1000;
+        background: transparent; border: none; cursor: pointer;
+        display: flex; flex-direction: column; align-items: center; outline: none;
     ">
-    <div style="
-        color: #B76E79; 
-        font-size: 24px; 
-        font-weight: 900;
-        line-height: 1.3;
-        text-shadow: 1px 1px 2px #fff, -1px -1px 2px #fff, 0 0 10px #fff; 
-        text-align: center;
-        white-space: nowrap;
-    ">
-        阿彌陀佛<br>
-        <span style="font-size: 20px;">~對我開心~</span>
-    </div>
-</button>
+        <img src="./my-button.gif" style="width: 150px; height: auto; margin-bottom: 10px;">
+        <div style="color: #B76E79; font-size: 24px; font-weight: 900; text-shadow: 0 0 10px #fff;">
+            阿彌陀佛<br><span style="font-size: 20px;">~對我開心~</span>
+        </div>
+    </button>
+
     <div id="canvas"></div>
 
     <script>
-        // 【修復】重新加入 csvUrl 並修正 Webhook 網址
+        // 1. 定義 CSV 來源與 Webhook (確保兩者都存在)
         const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRJMkp363s_yYnDuk1V89GMRKsV3cosMJhDhn2zTqzb9uWFmKZxImpCG8XP3EnjNgvSkdQaG7tKJbts/pub?output=csv";
-        const webhookUrl = "https://hook.us2.make.com/to36jd8jhtw2hmda6wd92h14zdlhjz2u";  
-        
-        let renderedLines = new Set(); 
-        let isAiActive = false; 
+        const webhookUrl = "https://hook.us2.make.com/to36jd8jhtw2hmda6wd92h14zdlhjz2u";
+
+        let renderedLines = new Set();
+        let isAiActive = false;
 
         async function fetchWords() {
             try {
-                // 加入時間戳記避免瀏覽器抓到舊資料
-                const response = await fetch(csvUrl + "&t=" + new Date().getTime());
+                // 加上時間戳記強制更新，不抓快取
+                const response = await fetch(csvUrl + "&cachebust=" + new Date().getTime());
                 const data = await response.text();
-                const lines = data.split(/\r?\n/).slice(1); 
+                const lines = data.split(/\r?\n/).slice(1);
                 const canvas = document.getElementById('canvas');
                 const aiDisplay = document.getElementById('ai-focus');
 
@@ -108,60 +69,49 @@
                     if (!line.trim()) return;
                     const columns = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
                     
-                    // 1. 處理 B 欄：使用者留言 (小字)
-                    const userText = columns[1]?.replace(/^"|"$/g, '').trim(); 
-                    if (userText && userText !== "" && !renderedLines.has(userText)) {
+                    // 處理 B 欄：使用者留言
+                    const userText = columns[1]?.replace(/^"|"$/g, '').trim();
+                    if (userText && !renderedLines.has(userText)) {
                         const span = document.createElement('span');
                         span.className = 'word';
                         span.innerText = userText;
-                        const fontSize = Math.floor(Math.random() * 30) + 25; 
-                        span.style.fontSize = fontSize + 'px';
-                        span.style.color = 'hsl(' + (Math.random() * 360) + ', 70%, 50%)'; 
+                        span.style.fontSize = (Math.floor(Math.random() * 30) + 25) + 'px';
+                        span.style.color = `hsl(${Math.random() * 360}, 70%, 50%)`;
                         span.style.left = (Math.random() * 80 + 10) + '%';
                         span.style.top = (Math.random() * 80 + 10) + '%';
-                        span.style.transform = `rotate(${(Math.random() - 0.5) * 20}deg)`;
                         canvas.appendChild(span);
                         renderedLines.add(userText);
                     }
 
-                    // 2. 處理 C 欄：AI 總結 (大字)
-                    const aiTextFromCell = columns[2]?.replace(/^"|"$/g, '').trim();
-                    if (isAiActive && aiTextFromCell && aiTextFromCell !== "") {
-                        aiDisplay.innerText = aiTextFromCell;
+                    // 處理 C 欄：AI 總結
+                    const aiText = columns[2]?.replace(/^"|"$/g, '').trim();
+                    if (isAiActive && aiText) {
+                        aiDisplay.innerText = aiText;
                         aiDisplay.style.opacity = "1";
-                        aiDisplay.style.transform = "translate(-50%, -50%) scale(1.1)"; 
-                        setTimeout(() => {
-                            if(isAiActive) aiDisplay.style.transform = "translate(-50%, -50%) scale(1)";
-                        }, 500);
-                    } else if (!isAiActive) {
-                        aiDisplay.style.opacity = "0";
                     }
                 });
-            } catch (e) { 
-                console.error("更新失敗:", e); 
+            } catch (e) {
+                console.error("讀取失敗:", e);
             }
         }
 
-        // 每 3 秒檢查一次 Google 試算表有無新資料
+        // 每 3 秒抓一次
         setInterval(fetchWords, 3000);
         fetchWords();
 
         function triggerAI() {
-            // 【修復】移除函式內重複宣告的舊 Webhook，統一使用上方的新網址
             isAiActive = true;
-            console.log("AI 開始運作，發送至新 Webhook...");
-            
             fetch(webhookUrl)
-            .then(response => {
-                alert("✨ 阿彌陀佛！AI 正在彙整全場留言，請稍候 5-10 秒！");
-                // 15 秒後關閉 AI 大字顯示區
+            .then(() => {
+                alert("✨ 阿彌陀佛！AI 正在彙整留言，請稍候 5-10 秒！");
+                // 15 秒後自動隱藏 AI 大字
                 setTimeout(() => {
                     isAiActive = false;
                     document.getElementById('ai-focus').style.opacity = "0";
-                }, 15000); 
+                }, 15000);
             })
-            .catch(error => {
-                alert("連線失敗，請檢查網路或 Make.com");
+            .catch(() => {
+                alert("連線失敗");
                 isAiActive = false;
             });
         }
