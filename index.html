@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>即時留言列表系統 - 分頁穩定版</title>
+    <style>
+        body { 
+            margin: 0; 
+            background: radial-gradient(circle, #f3e5f5 0%, #ce93d8 100%); 
+            height: 100vh; width: 100vw; overflow: hidden; 
+            font-family: "Microsoft JhengHei", sans-serif; 
+        }
+        
+        /* 列表容器 */
+        #list-container {
+            width: 80vw;
+            max-width: 800px;
+            margin: 5vh auto 0 auto;
+            height: 70vh;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            box-sizing: border-box;
+        }
+
+        /* 每一列留言的樣式 */
+        .list-item {
+            background: rgba(255, 255, 255, 0.85);
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 20px;
+            font-weight: bold;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: flex;
+            align-items: center;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .item-number {
+            margin-right: 15px;
+            font-size: 16px;
+            background: rgba(0,0,0,0.1);
+            padding: 2px 8px;
+            border-radius: 4px;
+            color: #333;
+        }
+
+        @keyframes slideIn { 0% { opacity: 0; transform: translateY(10px); } 100% { opacity: 1; transform: translateY(0); } }
+
+        /* 下方控制面板 */
+        .control-panel {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .nav-btn {
+            background: rgba(74, 20, 140, 0.8);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 50px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: background 0.2s;
+        }
+        .nav-btn:hover { background: rgba(74, 20, 140, 1); }
+
+        .info-badge {
+            background: white;
+            color: #4a148c;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-weight: 900;
+            border: 2px solid #4a148c;
+            min-width: 120px;
+            text-align: center;
+        }
+
+        /* 除錯小視窗 */
+        #debug-info {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 9999;
+            background: rgba(0,0,0,0.5);
+            color: #fff;
+            padding: 5px 10px;
+            font-size: 12px;
+            border-radius: 5px;
+            pointer-events: none;
+        }
+
+        /* 右下角祈福按鈕 */
+        #trigger-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 40px;
+            z-index: 1001;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="debug-info">正在連線至表單...</div>
+
+    <!-- 呈現 B 欄資料的容器 -->
+    <div id="list-container"></div>
+
+    <!-- 下方改成：上一頁、記錄、下一頁 -->
+    <div class="control-panel">
+        <button class="nav-btn" onclick="changePage(-1)">⬅ 上一頁</button>
+        <div class="info-badge" id="page-counter">頁數 0 / 0</div>
+        <button class="nav-btn" onclick="changePage(1)">下一頁 ➡</button>
+    </div>
+
+    <!-- 右下角祈福按鈕與修正文字 -->
+    <button id="trigger-btn" onclick="triggerAI()">
+        <img src="./my-button.gif" style="width: 120px; height: auto; margin-bottom: 10px;" onerror="this.src='https://cdn-icons-png.flaticon.com/512/1077/1077114.png'">
+        <div style="color: #B76E79; font-size: 18px; font-weight: 900; text-shadow: 0 0 10px #fff; line-height: 1.3; text-align: center;">
+            阿彌陀佛<br>
+            對我開心<br>
+            為你明心見性
+        </div>
+    </button>
+
+    <script>
+        const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRJMkp363s_yYnDuk1V89GMRKsV3cosMJhDhn2zTqzb9uWFmKZxImpCG8XP3EnjNgvSkdQaG7tKJbts/pub?output=csv";
+        const webhookUrl = "https://hook.us2.make.com/to36jd8jhtw2hmda6wd92h14zdlhjz2u";
+
+        let allUserTexts = []; // 儲存所有 B 欄文字
+        let currentPage = 1;   // 目前頁碼
+        const itemsPerPage = 10; // 每頁顯示 10 條
+
+        async function fetchWords() {
+            try {
+                // 每 1 秒輪詢一次，加上 cachebust 防止快取
+                const response = await fetch(csvUrl + "&cachebust=" + new Date().getTime());
+                const csvText = await response.text();
+                
+                const rows = parseCSV(csvText);
+                if (rows.length < 1) return;
+
+                let tempTexts = [];
+
+                // 從第 1 列開始（排除標題列），撈取 B 欄內容
+                for (let i = 1; i < rows.length; i++) {
+                    const columns = rows[i];
+                    if (columns.length < 2) continue;
+
+                    const userText = columns[1]?.trim();
+                    if (userText && userText !== "") {
+                        tempTexts.push(userText); // 依序放入陣列，保持原有順序
+                    }
+                }
+
+                // 檢查資料是否有更新，有更新才重新渲染畫面
+                if (JSON.stringify(tempTexts) !== JSON.stringify(allUserTexts)) {
+                    allUserTexts = tempTexts;
+                    updateListDisplay();
+                }
+
+                document.getElementById('debug-info').innerText = `總留言數: ${allUserTexts.length}`;
+
+            } catch (e) {
+                console.error("Fetch Error:", e);
+                document.getElementById('debug-info').innerText = "連線失敗";
+            }
+        }
+
+        // 穩定的 CSV 解析函式
+        function parseCSV(text) {
+            const rows = [];
+            let currentRow = [];
+            let currentField = '';
+            let inQuotes = false;
+
+            for (let i = 0; i < text.length; i++) {
+                const char = text[i];
+                const nextChar = text[i + 1];
+
+                if (char === '"' && inQuotes && nextChar === '"') {
+                    currentField += '"'; i++;
+                } else if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    currentRow.push(currentField);
+                    currentField = '';
+                } else if ((char === '\r' || char === '\n') && !inQuotes) {
+                    if (currentField || currentRow.length > 0) {
+                        currentRow.push(currentField);
+                        rows.push(currentRow);
+                        currentRow = [];
+                        currentField = '';
+                    }
+                    if (char === '\r' && nextChar === '\n') i++;
+                } else {
+                    currentField += char;
+                }
+            }
+            if (currentField || currentRow.length > 0) {
+                currentRow.push(currentField);
+                rows.push(currentRow);
+            }
+            return rows;
+        }
+
+        // 渲染列表與更新分頁資訊
+        function updateListDisplay() {
+            const container = document.getElementById('list-container');
+            const pageCounter = document.getElementById('page-counter');
+            container.innerHTML = ''; // 清空舊內容
+
+            const totalItems = allUserTexts.length;
+            const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+
+            // 安全機制：若目前頁數超過總頁數（例如資料減少），強制調整
+            if (currentPage > totalPages) currentPage = totalPages;
+
+            // 計算當前頁面要顯示的資料範圍
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
+
+            // 渲染當前頁面的 10 條資料
+            for (let i = startIndex; i < endIndex; i++) {
+                const div = document.createElement('div');
+                div.className = 'list-item';
+                
+                // 產生穩定的、每一列不同的 HSL 顏色 (依據 index 計算，非隨機，畫面更穩定)
+                const itemColor = `hsl(${(i * 35) % 360}, 75%, 35%)`;
+                div.style.color = itemColor;
+                div.style.borderLeft = `6px solid ${itemColor}`; // 加個漂亮的左邊條
+
+                // 流水號 (i + 1)
+                const numSpan = document.createElement('span');
+                numSpan.className = 'item-number';
+                numSpan.innerText = `#${i + 1}`;
+
+                // 留言內容
+                const textNode = document.createTextNode(allUserTexts[i]);
+
+                div.appendChild(numSpan);
+                div.appendChild(textNode);
+                container.appendChild(div);
+            }
+
+            // 更新分頁標籤 (顯示 頁數 X / Y)
+            pageCounter.innerText = `頁數 ${currentPage} / ${totalPages}`;
+        }
+
+        // 切換頁碼
+        function changePage(dir) {
+            const totalPages = Math.ceil(allUserTexts.length / itemsPerPage) || 1;
+            currentPage += dir;
+            
+            // 循環頁碼
+            if (currentPage < 1) currentPage = totalPages;
+            if (currentPage > totalPages) currentPage = 1;
+
+            updateListDisplay();
+        }
+
+        function triggerAI() {
+            fetch(webhookUrl)
+            .then(() => alert("✨ 祈福成功！AI 正在彙整新紀錄。"))
+            .catch(() => alert("連線失敗"));
+        }
+
+        // 修改為每 1 秒（1000 毫秒）讀取一次資料來源
+        setInterval(fetchWords, 1000);
+        fetchWords();
+    </script>
+</body>
+</html>
