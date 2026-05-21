@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>即時留言列表系統 - 智慧無閃爍版</title>
+    <title>即時留言列表系統 - 增量穩定版</title>
     <style>
         body { 
             margin: 0; 
@@ -36,7 +36,6 @@
             text-overflow: ellipsis;
             display: flex;
             align-items: center;
-            /* 只有新渲染出來的元素才會微幅淡入 */
             animation: fadeIn 0.4s ease-out;
         }
 
@@ -124,14 +123,14 @@
     <!-- 呈現 B 欄資料的容器 -->
     <div id="list-container"></div>
 
-    <!-- 下方改成：上一頁、記錄、下一頁 -->
+    <!-- 控制面板 -->
     <div class="control-panel">
         <button class="nav-btn" onclick="changePage(-1)">⬅ 上一頁</button>
         <div class="info-badge" id="page-counter">頁數 0 / 0</div>
         <button class="nav-btn" onclick="changePage(1)">下一頁 ➡</button>
     </div>
 
-    <!-- 右下角祈福按鈕與修正文字 -->
+    <!-- 右下角祈福按鈕 -->
     <button id="trigger-btn" onclick="triggerAI()">
         <img src="./my-button.gif" style="width: 120px; height: auto; margin-bottom: 10px;" onerror="this.src='https://cdn-icons-png.flaticon.com/512/1077/1077114.png'">
         <div style="color: #B76E79; font-size: 18px; font-weight: 900; text-shadow: 0 0 10px #fff; line-height: 1.3; text-align: center;">
@@ -145,49 +144,48 @@
         const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRJMkp363s_yYnDuk1V89GMRKsV3cosMJhDhn2zTqzb9uWFmKZxImpCG8XP3EnjNgvSkdQaG7tKJbts/pub?output=csv";
         const webhookUrl = "https://hook.us2.make.com/to36jd8jhtw2hmda6wd92h14zdlhjz2u";
 
-        let allUserTexts = [];   // 記憶體中儲存的所有舊資料
+        let allUserTexts = [];   // 記憶體中最終確定的穩定資料集
         let currentPage = 1;     // 目前頁碼
         const itemsPerPage = 10;   // 每頁顯示 10 條
 
         async function fetchWords() {
             try {
-                // 每 1 秒輪詢一次試算表
+                // 1秒輪詢，帶上時間戳記防快取
                 const response = await fetch(csvUrl + "&cachebust=" + new Date().getTime());
                 const csvText = await response.text();
                 
                 const rows = parseCSV(csvText);
                 if (rows.length < 1) return;
 
-                let latestTexts = [];
+                let hasNewData = false;
 
-                // 從第 1 列開始撈取最新 B 欄內容
+                // 逐行解析最新抓到的 CSV 內容
                 for (let i = 1; i < rows.length; i++) {
                     const columns = rows[i];
                     if (columns.length < 2) continue;
 
                     const userText = columns[1]?.trim();
                     if (userText && userText !== "") {
-                        latestTexts.push(userText);
+                        // 【關鍵修正】：如果這個文字在我們目前的記憶體中「完全沒出現過」，才加進去
+                        // 這樣可以防止因為 Google Sheets 網路快取倒退導致資料暫時消失
+                        if (!allUserTexts.includes(userText)) {
+                            allUserTexts.push(userText);
+                            hasNewData = true;
+                        }
                     }
                 }
 
-                // 【關鍵修改】：檢查當前頁面範圍內的資料是否有變動
-                const isDataChanged = JSON.stringify(latestTexts) !== JSON.stringify(allUserTexts);
-                
-                if (isDataChanged) {
-                    // 計算在更新前，當前頁面渲染的內容快照
-                    const oldPageSnapshot = getCurrentPageData(allUserTexts, currentPage);
-                    // 計算如果套用新資料，當前頁面應該長怎樣
-                    const newPageSnapshot = getCurrentPageData(latestTexts, currentPage);
+                // 如果真的有新資料加入，我們來看看是否需要重繪目前頁面
+                if (hasNewData) {
+                    const totalItems = allUserTexts.length;
+                    const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
                     
-                    // 先把背後的完整資料庫更新
-                    allUserTexts = latestTexts;
-
-                    // 只有當「目前眼睛看到的這一頁」內容真的有變時，才刷新 DOM 畫面
-                    if (JSON.stringify(oldPageSnapshot) !== JSON.stringify(newPageSnapshot)) {
+                    // 算出目前畫面上顯示的最大流水號（如果是第一頁就是看第1~10條）
+                    // 如果新加入的資料序號剛好落在當前頁面範圍內，才執行重繪
+                    const maxVisibleIndex = currentPage * itemsPerPage;
+                    if (totalItems <= maxVisibleIndex || currentPage === totalPages) {
                         updateListDisplay();
                     } else {
-                        // 雖然有新訊息，但不在當前頁面（可能在後面幾頁），我們只更新頁碼數字，不閃爍重繪列表
                         updatePageCounterOnly();
                     }
                 }
@@ -198,13 +196,6 @@
                 console.error("Fetch Error:", e);
                 document.getElementById('debug-info').innerText = "連線失敗";
             }
-        }
-
-        // 輔助函式：切片取得特定資料庫在某個頁面的 10 筆資料
-        function getCurrentPageData(dataArray, page) {
-            const startIndex = (page - 1) * itemsPerPage;
-            const endIndex = Math.min(startIndex + itemsPerPage, dataArray.length);
-            return dataArray.slice(startIndex, endIndex);
         }
 
         // 穩定的 CSV 解析函式
@@ -244,10 +235,10 @@
             return rows;
         }
 
-        // 只有在當前頁面內容變動時，才會執行的重繪函式
+        // 渲染畫面
         function updateListDisplay() {
             const container = document.getElementById('list-container');
-            container.innerHTML = ''; // 清空舊內容
+            container.innerHTML = ''; 
 
             const totalItems = allUserTexts.length;
             const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
@@ -279,14 +270,12 @@
             updatePageCounterOnly();
         }
 
-        // 僅更新下方的分頁數字標籤，不影響上方的文字看板
         function updatePageCounterOnly() {
             const pageCounter = document.getElementById('page-counter');
             const totalPages = Math.ceil(allUserTexts.length / itemsPerPage) || 1;
             pageCounter.innerText = `頁數 ${currentPage} / ${totalPages}`;
         }
 
-        // 切換頁碼（換頁時必須重繪）
         function changePage(dir) {
             const totalPages = Math.ceil(allUserTexts.length / itemsPerPage) || 1;
             currentPage += dir;
@@ -303,9 +292,9 @@
             .catch(() => alert("連線失敗"));
         }
 
-        // 每 1 秒向 Google Sheets 查一次是否有更新
-        setInterval(fetchWords, 1000);
+        // 執行初始化與輪詢
         fetchWords();
+        setInterval(fetchWords, 1000);
     </script>
 </body>
 </html>
