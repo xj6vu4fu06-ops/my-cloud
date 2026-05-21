@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>即時留言列表系統 - 分頁穩定版</title>
+    <title>即時留言列表系統 - 智慧無閃爍版</title>
     <style>
         body { 
             margin: 0; 
@@ -36,7 +36,8 @@
             text-overflow: ellipsis;
             display: flex;
             align-items: center;
-            animation: slideIn 0.3s ease-out;
+            /* 只有新渲染出來的元素才會微幅淡入 */
+            animation: fadeIn 0.4s ease-out;
         }
 
         .item-number {
@@ -48,7 +49,7 @@
             color: #333;
         }
 
-        @keyframes slideIn { 0% { opacity: 0; transform: translateY(10px); } 100% { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { 0% { opacity: 0; } 100% { opacity: 1; } }
 
         /* 下方控制面板 */
         .control-panel {
@@ -144,36 +145,51 @@
         const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRJMkp363s_yYnDuk1V89GMRKsV3cosMJhDhn2zTqzb9uWFmKZxImpCG8XP3EnjNgvSkdQaG7tKJbts/pub?output=csv";
         const webhookUrl = "https://hook.us2.make.com/to36jd8jhtw2hmda6wd92h14zdlhjz2u";
 
-        let allUserTexts = []; // 儲存所有 B 欄文字
-        let currentPage = 1;   // 目前頁碼
-        const itemsPerPage = 10; // 每頁顯示 10 條
+        let allUserTexts = [];   // 記憶體中儲存的所有舊資料
+        let currentPage = 1;     // 目前頁碼
+        const itemsPerPage = 10;   // 每頁顯示 10 條
 
         async function fetchWords() {
             try {
-                // 每 1 秒輪詢一次，加上 cachebust 防止快取
+                // 每 1 秒輪詢一次試算表
                 const response = await fetch(csvUrl + "&cachebust=" + new Date().getTime());
                 const csvText = await response.text();
                 
                 const rows = parseCSV(csvText);
                 if (rows.length < 1) return;
 
-                let tempTexts = [];
+                let latestTexts = [];
 
-                // 從第 1 列開始（排除標題列），撈取 B 欄內容
+                // 從第 1 列開始撈取最新 B 欄內容
                 for (let i = 1; i < rows.length; i++) {
                     const columns = rows[i];
                     if (columns.length < 2) continue;
 
                     const userText = columns[1]?.trim();
                     if (userText && userText !== "") {
-                        tempTexts.push(userText); // 依序放入陣列，保持原有順序
+                        latestTexts.push(userText);
                     }
                 }
 
-                // 檢查資料是否有更新，有更新才重新渲染畫面
-                if (JSON.stringify(tempTexts) !== JSON.stringify(allUserTexts)) {
-                    allUserTexts = tempTexts;
-                    updateListDisplay();
+                // 【關鍵修改】：檢查當前頁面範圍內的資料是否有變動
+                const isDataChanged = JSON.stringify(latestTexts) !== JSON.stringify(allUserTexts);
+                
+                if (isDataChanged) {
+                    // 計算在更新前，當前頁面渲染的內容快照
+                    const oldPageSnapshot = getCurrentPageData(allUserTexts, currentPage);
+                    // 計算如果套用新資料，當前頁面應該長怎樣
+                    const newPageSnapshot = getCurrentPageData(latestTexts, currentPage);
+                    
+                    // 先把背後的完整資料庫更新
+                    allUserTexts = latestTexts;
+
+                    // 只有當「目前眼睛看到的這一頁」內容真的有變時，才刷新 DOM 畫面
+                    if (JSON.stringify(oldPageSnapshot) !== JSON.stringify(newPageSnapshot)) {
+                        updateListDisplay();
+                    } else {
+                        // 雖然有新訊息，但不在當前頁面（可能在後面幾頁），我們只更新頁碼數字，不閃爍重繪列表
+                        updatePageCounterOnly();
+                    }
                 }
 
                 document.getElementById('debug-info').innerText = `總留言數: ${allUserTexts.length}`;
@@ -182,6 +198,13 @@
                 console.error("Fetch Error:", e);
                 document.getElementById('debug-info').innerText = "連線失敗";
             }
+        }
+
+        // 輔助函式：切片取得特定資料庫在某個頁面的 10 筆資料
+        function getCurrentPageData(dataArray, page) {
+            const startIndex = (page - 1) * itemsPerPage;
+            const endIndex = Math.min(startIndex + itemsPerPage, dataArray.length);
+            return dataArray.slice(startIndex, endIndex);
         }
 
         // 穩定的 CSV 解析函式
@@ -221,38 +244,31 @@
             return rows;
         }
 
-        // 渲染列表與更新分頁資訊
+        // 只有在當前頁面內容變動時，才會執行的重繪函式
         function updateListDisplay() {
             const container = document.getElementById('list-container');
-            const pageCounter = document.getElementById('page-counter');
             container.innerHTML = ''; // 清空舊內容
 
             const totalItems = allUserTexts.length;
             const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
 
-            // 安全機制：若目前頁數超過總頁數（例如資料減少），強制調整
             if (currentPage > totalPages) currentPage = totalPages;
 
-            // 計算當前頁面要顯示的資料範圍
             const startIndex = (currentPage - 1) * itemsPerPage;
             const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
 
-            // 渲染當前頁面的 10 條資料
             for (let i = startIndex; i < endIndex; i++) {
                 const div = document.createElement('div');
                 div.className = 'list-item';
                 
-                // 產生穩定的、每一列不同的 HSL 顏色 (依據 index 計算，非隨機，畫面更穩定)
                 const itemColor = `hsl(${(i * 35) % 360}, 75%, 35%)`;
                 div.style.color = itemColor;
-                div.style.borderLeft = `6px solid ${itemColor}`; // 加個漂亮的左邊條
+                div.style.borderLeft = `6px solid ${itemColor}`;
 
-                // 流水號 (i + 1)
                 const numSpan = document.createElement('span');
                 numSpan.className = 'item-number';
                 numSpan.innerText = `#${i + 1}`;
 
-                // 留言內容
                 const textNode = document.createTextNode(allUserTexts[i]);
 
                 div.appendChild(numSpan);
@@ -260,16 +276,21 @@
                 container.appendChild(div);
             }
 
-            // 更新分頁標籤 (顯示 頁數 X / Y)
+            updatePageCounterOnly();
+        }
+
+        // 僅更新下方的分頁數字標籤，不影響上方的文字看板
+        function updatePageCounterOnly() {
+            const pageCounter = document.getElementById('page-counter');
+            const totalPages = Math.ceil(allUserTexts.length / itemsPerPage) || 1;
             pageCounter.innerText = `頁數 ${currentPage} / ${totalPages}`;
         }
 
-        // 切換頁碼
+        // 切換頁碼（換頁時必須重繪）
         function changePage(dir) {
             const totalPages = Math.ceil(allUserTexts.length / itemsPerPage) || 1;
             currentPage += dir;
             
-            // 循環頁碼
             if (currentPage < 1) currentPage = totalPages;
             if (currentPage > totalPages) currentPage = 1;
 
@@ -282,7 +303,7 @@
             .catch(() => alert("連線失敗"));
         }
 
-        // 修改為每 1 秒（1000 毫秒）讀取一次資料來源
+        // 每 1 秒向 Google Sheets 查一次是否有更新
         setInterval(fetchWords, 1000);
         fetchWords();
     </script>
